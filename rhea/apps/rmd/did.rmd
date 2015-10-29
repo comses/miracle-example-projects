@@ -1,0 +1,902 @@
+---
+title: "RHEA Analysis and Visualization"
+---
+
+This is document contains examples on analysis and visualisations on output
+from the RHEA agent-based-model for the "Digging into Data" project.  Each
+example is presented with accompanying `R` code as well as further
+documentation on the functions used to create the visualization or
+analysis.  The examples require data provided in the accompanying `../../data/`
+directory.  Further details on the data sets and the data items/variables
+are provided at the end of the document.
+
+<!-- provides some examples and details about the RHEA
+visualisation and analysis. The RHEA agent-based model depicts a
+hetergeneous housing property market with amenities. -->
+
+## Description of the RHEA Agent-Based Model
+
+<!-- The outputs analyzed in this paper are drawn from an agent-based
+ model: \tb{R}isks and \tb{H}edonics in an \tb{E}mpirical
+ \tb{A}gent-Based Land-Market or RHEA. -->
+
+RHEA is the acronym for **R**isks and **H**edonics in an **E**mpirical
+**A**gent-Based Land-Market.  The model simulates a bilateral,
+heterogeneous housing market in an empirical landscape. Buyers search for
+properties in a seaside town where both coastal amenities and environmental
+risks of flooding are spatially correlated.  A realtor agent serves as a
+mediating agent that learns about the current market trend and willingness
+to pay for various spatial attributes of properties (Filatova, 2014).  At
+each time step, sellers of the properties advertise their ask prices while
+buyers select and offer bids on properties.  Then, the two groups engage in
+dyadic (pair-wise) negotiation which may or may not result in a successful
+transaction (or trade).
+
+The ask prices are primarily market-driven: sellers (1) consult with a
+realtor on the appropriate price given the current trends as estimated by a
+hedonic analysis of the recent simulated transactions and (2) adjust the
+ask price if a property remains too long on a market. Buyers bid on the
+single property that brings them maximum utility and is affordable for
+their budgets. A buyer's budget constraints include their income,
+preference for amenities, a necessity to pay insurance premiums for
+flood-prone properties, and the possibility to activate an annual income
+growth.  Spatial patterns of price dynamics and intensity of trade are the
+emergent outputs of the model. When studying them under various parameter
+settings, we noticed that relative market power of buyers and sellers plays
+a role. The explanation is twofold.  Firstly, a parcel that is very
+attractive will most likely receive several bid offers, out of which its
+seller chooses the highest, driving prices for most desirable properties
+up. Secondly, sellers of the properties that are less desirable may receive
+only one or even no bid offers, which can result in their accepting a bid
+that is below their ask prices or reducing their ask prices after a number
+of unsuccessful trades. Thus, excess demand drives prices up while excess
+supply pushed them down.
+
+<!-- Shorthand versions of commands to produce the plots and tables appear at
+the end of this document. -->
+
+<!-- ```{r setup}
+ opts_knit$set(root.dir="rmd")
+ ``` -->
+<!--
+<ul id="ProjectSubmenu">
+    <li><a href="/projects/markdown/" title="Markdown Project Page">Main</a></li>
+    <li><a class="selected" title="Markdown Basics">Basics</a></li>
+    <li><a href="/projects/markdown/syntax" title="Markdown Syntax Documentation">Syntax</a></li>
+    <li><a href="/projects/markdown/license" title="Pricing and License Information">License</a></li>
+    <li><a href="/projects/markdown/dingus" title="Online Markdown Web Form">Dingus</a></li>
+</ul>
+-->
+
+## A Note About the Data Sets
+
+The RHEA output data sets employed in the following examples are encoded as
+flat `data.frame`s in `R`.  The columns need to include (in no particular
+order) the run seed (or incrementing id number is sufficient), time step or
+`tick`, experimental variables/conditions, and outcome variables.  For
+example, the following table shows the first three and several other rows
+of the data employed in the first example (i.e., the data frame `x.bs.200`):
+
+```{r tab_example, eval=TRUE, echo=FALSE}
+require(knitr)
+if (!exists("x.bs.200")) x.bs.200 = read.csv("../../data/x_bs_200.csv")
+x = x.bs.200[c(1:3,200:203+10452),1:8]
+for (i in 5:8) x[,i] = sprintf("%.2f",round(x[,i],2));
+x = rbind(x[1:3,],rep("...",ncol(x)),x[-1:-3,],rep("...",ncol(x)));
+x = cbind(x,"...")
+colnames(x)[ncol(x)] = "..."
+rownames(x) = NULL
+kable(x,align='r')
+```
+
+In this data, the 1st two columns contain the experimental values (in `RH`
+and `Ins`) and the next two columns contain the random number seed and the
+time step (in `s` and `t` respectively).  The subsequent columns contain
+the model outcomes.
+
+User-defined data sets to be used with the visualization and analysis
+routines need to follow this tabular format.
+
+Details of all of the data sets and data items/variables are provided at
+the end of the document.
+
+
+<!--
+|Ins|RH|s|t|avPriceFP0|avPriceFP100|avPriceFP500|avPriceCoastFront|...|
+|--:|-:|-|-|---------:|-----------:|-----------:|----------------:|--:|
+|0  |0 |0|0|239169.97 |266217.58   |193210.70   |461214.67        |...|
+|0  |0 |0|1|239578.40 |266698.20   |193525.24   |462776.09        |...|
+-->
+
+<!--
+```{r tab_example_x, eval=TRUE, echo=FALSE, results="asis"}
+if (!exists("x.bs.200")) x.bs.200 = read.csv("../../data/x_bs_200.csv")
+library(xtable)
+x = x.bs.200[c(1:3,200:203+10452),1:8]
+print(xtable(x),type="latex")
+```
+-->
+
+## A Note About the Functions
+
+All of the functions in the examples require prior loading of the primary
+script file (`ut_did.R`) in the `R` session using the following command:
+```{r source_script, echo=TRUE}
+source("../../src/lib/ut_did.R") 
+```
+
+One may consider `ut_did.R` to be a library of functions which contain the
+plotting functions of the examples below as well as auxiliary functions.
+
+Also, all functions have an `outfile` parameter.  If `outfile` is set, then
+the plotting function will write its output to a PDF file specified by
+`outfile`.  Users may also set `width` and `height` (in inches), the
+defaults of which are both 7 if not already specified by the function, to
+adjust the _x_- and _y_- dimensions of the PDF plot as they see fit.  It is
+advisable to include the `.pdf` file extension in the `outfile` filename,
+e.g., `outfile="figure_1.pdf"`.
+
+The function producing regression models will write its output in text (not
+PDF).  It is advisable to include the `.txt` file extension in the
+`outfile` filename for regression model outpts, e.g.,
+`outfile="table_1.txt"`.
+
+\newpage
+
+## Example 1 - Buyers and Sellers - Saturation and Catastrophe
+
+### Example 1a - Buyer Spike Across Seeds
+
+In the RHEA model, we can track the number of buyers and sellers at each
+time period (or tick) to reveal those seeds/runs that deviate from the
+nominal behavior.  The goal of this diagnostic visual analysis is to
+ascertain the characteristics of those simulation instances in which the
+population counts of either agent type pool deviates from a nominal
+distribution.
+
+One needs first load in the dataset employed and run the plotting function
+for charting two variables across 25 seeds/runs over time horizon of 200
+ticks, highlighting those trajectories that surpass a defined
+threshold.  The following lines should be run in the `R` session to
+produce the figure below:
+
+<!-- setwd("c:/Dropbox/usr/proj/ut/R/rmd")
+path <<- "../did/DID_UT_RHEA/" -->
+<!--  ```{r setwd, echo=FALSE}
+ setwd("c:/Dropbox/usr/proj/ut/R/did/DID_UT_RHEA")
+ path <<- "./"
+ ``` -->
+```{r spike_draw, echo=TRUE, fig.height=3, fig.width=5, dev.args=list(pointsize=8)}
+if (!exists("x.bs.200")) x.bs.200 = read.csv("../../data/x_bs_200.csv")
+fig.nB.did(data=x.bs.200)
+```
+
+The light pink trails indicate the seller count per tick, which appears to
+increase at a slight rate.  The gray trails indicate most of the buyer
+counts, which initially decrease and reach a steady state.  The
+multi-colored trails that climb indicate distinct runs/seeds which incur
+buyer counts exceeding the nominal threshold of 1300.
+The graph reveals that for some seeds, the buyer counts climb high after
+which it quickly collapses to a nominal level.  This observation tells us
+that the curvilinear mean Buyer/Seller difference (for coef = 0.70) suffers
+from these "mountain" outlier influences.  The seller counts on the
+otherhand appear wholly stable and monotonically increasing and does not
+contribute to the curvilinear mean.  Furthermore, we observe a small spike
+into both buyer and seller counts near the start of the simulation.
+<!--\emph{this will require some investigation.}-->
+<!--**_More details on plot forthcoming_** .-->
+
+The graph reveals that for some seeds, the buyer counts climb high after
+which it quickly collapses to a nominal level.  This observation tells us
+that the curvilinear mean Buyer/Seller difference (for coef = 0.70) suffers
+from these "mountain" outlier influences.  The seller counts on the
+otherhand appear wholly stable and monotonically increasing and does not
+contribute to the curvilinear mean.  Furthermore, we observe a small spike
+into both buyer and seller counts near the start of the simulation.
+<!--\emph{this will require some investigation.}-->
+<!--**_More details on plot forthcoming_** .-->
+
+\newpage
+
+#### Description of `fig.nB.did`
+
+The `fig.nB.did` plotting function has the following arguments which may be
+employed to generalize its functionalities.  As a general function, it can
+plot trajectories of two outcomes for individual runs and also graphically
+highlight those values which exceed a threshold.
+
+------------------------------------------------------------------------------
+Argument  Default          Description
+--------  -------          -------------------------------------------------
+data      x.bs.200         Dataset containing variables in yvar
+
+yvar      c("nB","nS")     Two outcome variables of data to plot
+
+S         0:24             Values/range of the seeds to consider
+
+svar      "s"              Variable with the seeds
+
+tvar      "t"              Variable with time step values
+
+yM        30               Vertical dashed line denoting mortgage years (assumes each tick is semi-annual)
+
+crit      1300             Critical value of `yvar[1]`, above which trajectories are highlighted by different colors
+
+sd.mult   0                If `sd.mult` = 0, then use `crit` directly.  If `sd.mult` > 0, then `crit` = $\mu + \sigma \cdot$`sd.mult` (of `yvar[1]`).  If `sd.mult` = -1, then `crit` = `max(yvar[2])`
+
+xlab      "Ticks"          Label of _x_-axis
+
+ylab      "Buyers/Sellers" Label of _y_-axis
+
+y0        500              Minimum of _y_-axis values displayed
+------------------------------------------------------------------------------
+
+<!--
+------------------------------------------------------------------------------
+Argument                                   Default           Description
+--------                                   -------           -----------------------------
+data=&lt;data.frame&gt;                    data=x.bs.200     Dataset containing variables in yvar
+
+S=&lt;vector or range of seeds&gt;         S=0:24            Specify which runs/seeds to display
+
+yvar=&lt;vector with 2 string elements&gt; yvar=c("nB","nS") Specify which 2 variables of data to plot
+
+svar=&lt;string&gt;                        svar="s"          Specify variable holding seed id
+
+yM=&lt;mortgage year&gt;                   yM=30             Vertical dashed line denoting mortgage years (assumes each tick is semi-annual)
+------------------------------------------------------------------------------
+-->
+
+<!--
+|Parameter|Default|Description|
+|---------|-------|-----------|
+|data=&lt;data.frame&gt;|data=x.bs.200|Dataset containing variables in yvar|
+|S=&lt;vector or range of seeds&gt;|S=0:24 |Specify which runs/seeds to display|
+|yvar=&lt;vector with 2 string elements&gt;|yvar=c("nB","nS")|Specify which 2 variables of data to plot|
+|svar=&lt;string&gt;|svar="s"|Specify variable holding seed id|
+|yM=&lt;mortgage year&gt;|yM=30|Vertical dashed line denoting mortgage years (assumes each tick is semi-annual)|
+-->
+
+\newpage
+
+### Example 1b - Buyer Spikes for Individual Seeds
+
+In order to understand these "mountains", we display the Buyer (black) and
+Seller (<span style="color:red">red</span>) counts for each run/seed <!--in Vref{fig:BS_seeds_raw}--> in
+separate plots.  These graphs have a common _y_-axis range to allow for
+comparison.  The green dots highlight sequences in which the buyer counts
+increase for at least 5 consecutive ticks.  <!--Vref{fig:BS_seeds_rel}-->
+The following lines should be run in the `R` session to produce the
+figure below:
+
+<!-- # fig.height=3, fig.width=5, 
+# par("mgp"=c(2,.6,0))
+# par("mar"=c(1,1,.05,.01))
+# fig.nBS.did(data=x.bs.200) -->
+```{r spike_seeds_draw, echo=TRUE,dev.args=list(pointsize=12), fig.height=7, fig.width=7}
+if (!exists("x.bs.200")) x.bs.200 = read.csv("../../data/x_bs_200.csv")
+fig.nBS.did(cex=.75,abs=T)
+```
+
+We observe that the larger spikes consist of multiple rising (green)
+sequences.  The next figure displays the same data but using the
+_y_-axis range of each seed's data.  Note that the _y_-axis values
+which appear on the leftmost graphs pertain only to their immediate
+graphs.  The following lines should be run in the `R` session to
+produce the figure below:
+
+<!-- # fig.height=3, fig.width=5, 
+# par("mgp"=c(2,.6,0))
+# par("mar"=c(1,1,.05,.01))
+# fig.nBS.did(data=x.bs.200)
+-->
+
+```{r spike_seeds_draw_local, echo=TRUE,dev.args=list(pointsize=12), fig.height=7, fig.width=7}
+if (!exists("x.bs.200")) x.bs.200 = read.csv("../../data/x_bs_200.csv")
+fig.nBS.did(cex=.75,abs=F,lwd=.5)
+```
+
+We observe that the "mountains" entail multiple sequences of increasing
+buyer counts suggesting that such sequences are required to sustain the
+growth of these counts.  We also observe less concentrated rising sequences
+and almost all runs contain these.
+
+\newpage
+
+#### Description of `fig.nBS.did`
+
+The `fig.nBS.did` plotting function has the following arguments which
+may be employed to generalize its functionalities.  The function
+produces a set of plots containing two variables over time with each
+plot representing results from a distinct seed.
+
+------------------------------------------------------------------------------
+Argument  Default            Description
+--------  -------            -------------------------------------------------
+data      x.bs.200           Dataset containing variables in `yvar`
+
+S         0:24               Value(s)/range of seeds to display
+
+yvar      c("nB","nS")       Two variables in `data` to plot
+
+svar      "s"                Variable with the seeds
+
+tvar      "t"                Variable with time step values
+
+scale     1000               Dividing factor for `yvar` (for purposes of displaying shorter numerical labels)
+
+abs       TRUE               Is the _y_-axis scale fixed and absolute across all plots?
+------------------------------------------------------------------------------
+
+<!--
+|Parameter|Default|Description|
+|---------|-------|-----------|
+|data=&lt;data.frame&gt;|data=x.yM.10.200|Dataset containing variables `x` and `y`|
+|x=&lt;variable&gt;|x="nT"|Specify variable for $x$-axis|
+|y=&lt;variable&gt;|x="nB"|Specify variable for $y$-axis|
+|s=&lt;seed&gt;|S=0:24 |Specify which seed to display|
+|fx=&lt;function&gt;|fx=I|Transformation function for `x` variable|
+|fy=&lt;function&gt;|fy=I|Transformation function for `y` variable|
+|xlab=&lt;label&gt;|xlab="nT"|Label for $x$-axis|
+|ylab=&lt;label&gt;|ylab="nB"|Label for $y$-axis| -->
+
+\newpage
+
+### Example 1c - Trajectory Plots
+
+For one of the seeds that produce a saturation/crash pattern, we plot the
+trajectory of several outcomes across a 2D space over a time horizon of 200
+ticks. The following lines should be run in the `R` session to produce
+the figures below:
+
+
+<!--
+```{r}
+library(knitr)
+opts_chunk$set(tidy.opts=list(width.cutoff=70))
+```
+-->
+
+<!-- ```{r spike_trajectory_draw, eval=TRUE, dev.args=list(pointsize=8)}
+ ```{r spike_trajectory_draw, eval=TRUE, dev.args=list(pointsize=8), out.width="32%"} -->
+
+
+<!--```{r spike_trajectory_draw, eval=TRUE, fig.height=2.8, fig.width=3, dev.args=list(pointsize=8), fig.show="hold"}-->
+```{r spike_trajectory_draw, eval=TRUE, fig.height=2.8, fig.width=3, dev.args=list(pointsize=8), fig.show="hold", tidy=TRUE, tidy.opts=list(width.cutoff=70)}
+if (!exists("x.yM.10.200")) x.yM.10.200 = read.csv("../../data/x_yM_10_200.csv")
+fig.yM.traj.did(data=x.yM.10.200,x="nT",y="nB",s=1,fx=I,fy=I,xlab="Number of Trades",ylab="Number of Buyers")
+fig.yM.traj.did(data=x.yM.10.200,x="avPriceCoastFront",y="nB",s=1,fx=I,fy=I,xlab="Average Price Coastal Front",ylab="Numbers of Buyers")
+fig.yM.traj.did(data=x.yM.10.200,x="t",y="avPriceCoastFront",s=1,fx=I,fy=I,xlab="Ticks",ylab="Average Price of Coastal Front")
+```
+
+The first one charts the number of buyers and number of trades; the second
+one, the number buyers against the average coastal property price; and the
+third, the average coastal property price against time (ticks).  In each
+plot, the colors denote time: dark blue is the beginning of the simulation
+while dark red represents the end of the simulation.
+
+The crash on the market occurs because many buyers leave without finding an
+affordable house. Over time, prices, which sellers gradually adjust if they
+are not able to sell, drop to the level when buyers may at least attempt to
+purchase a house by bidding on it. Yet, at this moment the market is
+already so saturated with buyers, that this excess demand creates a
+tremendous competition among them. As a result, many buyers leave since
+they face several unsuccessful trade attempts. At the same time, prices
+start to grow since sellers select the highest bid out of many bids that
+are now being submitted.
+
+\newpage
+
+#### Description of `fig.yM.traj.did`
+
+The `fig.yM.traj.did` plotting function has the following arguments
+which may be employed to generalize its functionalities.  As a generic
+function, it plots the trajectory of model behavior in a 2D space
+defined two of the outcomes.
+
+------------------------------------------------------------------------------
+Argument  Default            Description
+--------  -------            -------------------------------------------------
+data      x.yM.10.200        Dataset containing variables `x` and `y`
+
+x         "nT"               Variable for _x_-axis (default = number of trades)
+
+y         "nB"               Variable for _y_-axis (default = number of buyers)
+
+s         1                  Single seed value from `data` to plot (assuming `data` contains outcomes from multiple seeds)
+
+fx        I                  Transformation function for `x` variable (default = indicator function)
+
+fy        I                  Transformation function for `y` variable (default = indicator function)
+
+xlab      "Number of Trades" Label for _x_-axis
+
+ylab      "Number of Buyers" Label for _y_-axis
+------------------------------------------------------------------------------
+
+\newpage
+
+### Example 1d - Effects of Mortgage on Buyer Spikes
+
+In next figure, we display the buyer counts under a new depreciation
+mechanism in which is applied cumulatively <!-- (`dm`= 1) --> and an
+increase in the proprotion of properties on sale (fraction on sale or
+`fos`= 0.20). The following lines should be run in the `R` session to
+produce the figure below:
+
+```{r spike_mortgage_draw, eval=TRUE}
+if (!exists("x.yM2.200")) x.yM2.200 = read.csv("../../data/x_yM2_200.csv")
+fig.yM2.did(data=x.yM2.200,lwd=.25)
+```
+
+<!--While the new depreciation mode (`dm` = 1) seems to reduce the prevalence
+of the buyer spike, spikes seem to occur frequently for `yM` = 10.  We now
+test to see if the `stop-refuse` fix eliminates the spikes.-->
+
+<!--but without the `stop-refuse` fix (i.e., `sr`=0).--> The columns in the
+figure indicate each of the mortgage years, `yM` $\in$ {10,20,30,40} and
+the rows indicate each combination of the three conditions: realtor hedonic
+(0=static), insurance, and income growth.  For example, the first row is
+(0,0,0) (static, no insurance, and no income growth).  The second row is
+(0,0,1) (same but with income growth).  The final row is (1,1,1) which
+equates to engagement of all three adaptive, insurance, and income growth.
+For presentation purposes, the axes labels have been removed.
+
+The alternative depreciation mechanism appears to mitigate the buyer spikes
+especially for the longer mortgage periods.  However, we see that the
+spikes are even more prevalent when the mortgage period is curtailed (`yM` =
+10), which reduces the purchasing power of the buyers.  In the absence of
+adaptive price assessment (static hedonic) and income growth (rows 000 and
+010), the proportionally fewer and fewer buyers are able to afford
+properties so the influx of new buyers creates a monotonically increasing
+trend in the buyer counts.
+
+\newpage
+
+#### Description of `fig.yM2.did`
+
+The `fig.yM2.did` plotting function has the following arguments which may
+be employed to generalize its functionalities.  The function implicitly
+seeks all combinations of the 1st three variables (enumerated in the
+plotted rows) against a fourth variables (enumerated in the plotted
+columns).  These four variables are specified in `zvar`.  In each plot, the
+outcomes of `yvar` are shown for all seeds in `S`.
+
+------------------------------------------------------------------------------
+Argument  Default                Description
+--------  -------                -------------------------------------------------
+data      x.yM2.200              Dataset containing variables of `yvar` and `zvar`
+
+S         0:24                   Range or vector of seeds to plot
+
+mfrow     c(8,4)                 Dimensional arrangement of subplots
+
+yvar      c("nB","nS")           Two variables of `data` to plot
+
+svar      "s"                    Variable with seeds
+
+zvar      c("RH","Ins","G","yM") Vector specifying the experimental conditions/variables
+
+RH        0:1                    1st condition values/range (default: realtor hedonics)
+
+Ins       0:1                    2nd condition values/range (default: insurance)
+
+G         0:1                    3rd condition values/range (default: income growth)
+
+YM        c(10,20,30,40)         4th condition values/range (default: mortgage years)
+------------------------------------------------------------------------------
+
+\newpage
+
+## Example 2 - New Buyer Coefficient
+
+In the next figure, we examine the effects of adjusting the `new buyer
+coefficient` which guides the rate at which new buyers enter the market.
+The new buyer coefficient (default of 0.70) to have a range of values $\in$
+{0.60,0.65,0.70,0.75,0.80}.  The colors follow a spectrum from dark blue
+for the lowest values to dark red for the highest.  Each coefficient is
+applied to each of the four conditions arising from the realto hedonic and
+insurance binary conditions.  The order of display for overlapping points
+have been randomized so as to allow better viewing of these points and
+accompanying lines. The following lines should be run in the `R`
+session to produce the figure below:
+
+
+```{r nBC_draw, fig.height=3, fig.width=5, dev.args=list(pointsize=8), tidy=TRUE, tidy.opts=list(width.cutoff=70)}
+if (!exists("x.bs.coef.200")) x.bs.coef.200 = read.csv("../../data/x_bs_coef_200.csv")
+fig.coef.did(data=x.bs.coef.200,Y="dBS",off.div=.75,ylab="Buyers - Sellers",rel=F,ylim=c(-500,620))
+```
+
+The main observed effect is the new buyers coefficient having a positive
+impact on the difference between buyers and sellers.  This is clearly
+expected as the coefficient directly determines the influx of new buyers at
+each time step.  However, we also observe a curvilinear trend in those
+conditions in which the realtor hedonics are Adaptive (or +A).  These
+non-monotonic trends are invariably linked to the buyer count spikes and
+crashes observed in the previous examples.  Moreover, in general, the
+adaptive hedonics condition appears to consistently result in lower
+buyer/seller difference (within each buyer coefficient setting), the spikes
+notwithstanding.  The inference from this observation is that the adaptive
+condition eventually results in fewer buyers remaining in the market.
+
+<!-- The coefficient clearly has an effect on the price curvature as well
+as end prices.  Generally, the higher the coefficient (i.e., more new
+buyers), the higher the prices as larger seller markets are realized.
+The curves appear largely divergent with the exception of some trends
+associated with coefficients of 0.75 or 0.80; these appear they might
+converge.  The Buyer/Seller difference for each coefficient appears
+-->
+<!-- in
+ \Vref{fig:BS_coef_5} below.-->
+
+<!-- The peak we observed in \Vref{fig:BS_200_5}
+the above plot appears affected by the
+new buyer coefficient, and its effect is mitigated with the lower
+values.  We might suspect that the trends retaining slope at year 100
+will converge given the plateaus for the lower coefficients. -->
+
+\newpage
+
+#### Description of `fig.coef.did`
+
+The `fig.coef.did` plotting function has the following arguments which may be
+employed to generalize its functionalities.  As a general function, it
+shows separate lines for three conditions as defined by `yvar`.  Note that
+the _x_-axis values are divided by 2 to reflect the semi-annual frequency of
+each tick.
+
+----------------------------------------------------------------------------------------------
+Argument  Default                            Description
+--------  -------                            -------------------------------------------------
+data      x.bs.coef.200                      Dataset containing variables of `yvar`
+
+Y         "avPriceCoastFront"                Variable for _y_-axis
+
+yvar      c("RH","Ins","nBC")                Variables of the experimental conditions
+
+RH        0:1                                1st variables' values/range (default for realtor hedonics)
+
+Ins       0:1                                2nd variables' values/range (default for insurance)
+
+nbcs      c(0.60,0.65,0.70,0.75,0.80)        3rd variables' values/range (default for new buyer coefficient)
+
+len       15                                 Number of points to plot on top of lines
+
+ylab      "% @ Time 1"                       Label for _y_-axis
+
+xlab      "Year"                             Label for _x_-axis
+
+ylim      c(100,300)                         Plotting limits for the _y_-axis
+
+legend    c("-A -I","-A +I","+A -I","+A +I") Legend labels for all combinations of first two conditions
+
+off.div   0.75                               Offset divisor for _x_-axis position to prevent overlapping points
+
+rel       TRUE                               Are outcomes are relative to first value of `Y` (as a percentage)?
+------------------------------------------------------------------------------
+
+\newpage
+
+## Example 3 - Examining Depreciation Effects on the Stability of the Hedonic Model Using Multidimensional Scaling
+
+Depreciation on a property's price occurs when the seller cannot sell for a
+given duration.  We examine the effects of three methods of
+operationalizing depreciation: 1) depreciation is performed on the current
+property price (`dm` = 0), 2) the depreciation cumulatively appreciates
+(`dm` = 1) for multiple sale failures and is applied to the market-based
+asking price, 3) depreciation is performed on the market-based asking price
+and resets in the next transaction, if any, and is non-cumulative (`dm` =
+2).  We regard the cumulative depreciation (`dm` = 1) to be the more
+correct application of depreciation.
+
+In the following figures, we specifically examine the effects of the
+depreciation methods on the hedonic regression coefficients.  Naturally, we
+employ the adaptive realtor hedonic condition for these results.  Each of
+the coefficients across time steps have been scaled by the initial value
+and so they represent relative changes.  Each (relative) coefficient set
+(vector) at each time period has a Euclidean distance to each of the
+vectors from the other time periods.  These distances appear in a $m \times
+m$ distance matrix (where $m = \text{time steps} = 60$); in this example,
+we consider 60 time steps (or 30 years reflecting the default mortgage
+period).  Each cell ($i$,$j$) in this matrix refers to the Euclidean
+distance between the relative coefficents of tick $i$ and those of $j$.
+
+The distance matrix occupies an $m$-dimensional space which be
+dimensionally-reduced using dimension reduction methods.  Here, we employ
+classical multidimensional scaling (MDS aka principal coordinate analysis)
+which in employs an eigen-decomposition of the distance matrix.  An MDS'
+result to similar to PCA (principal component analysis); in fact, the
+unscaled PCA coordinates are identical to MDS.  Here, we reduce the
+$m$-dimensional set of coefficient vectors to 2-dimensions for
+visualization purposes.
+
+The following figures contain MDS's resulting from the evolution of the
+hedonic regression from each of the depreciation methods (for three seeds)
+in order to evaluate both the model's behavior in the context of the
+hedonic price mechanism. The following lines should be run in the `R`
+session to produce the figures below:
+
+<!--```{r deprec_short, eval=FALSE, out.width="32%", fig.show="hold"}-->
+<!--```{r deprec_very_long, eval=TRUE, out.width="32%", fig.show="hold"}-->
+<!--```{r deprec_very_long, eval=TRUE, out.width="32%"}-->
+<!-- if (!exists("xc0.s1")) f.load.deprec(path="../../data/",print=F) -->
+<!-- if (!exists("xc0.s1")) f.load.deprec(path="../../data/",print=F) -->
+
+```{r deprec_short, eval=FALSE, out.width="32%"}
+if (!exists("x.deprec.60")) x.deprec.60 = read.csv("../../data/x_deprec_60.csv")
+fig.deprec.rdist.did(data=x.deprec.60,mode="rmd")
+```
+or
+```{r deprec_very_long, eval=TRUE, fig.width=3, fig.height=2.8}
+if (!exists("x.deprec.60")) x.deprec.60 = read.csv("../../data/x_deprec_60.csv")
+for (dm in 0:2) {
+  for (seed in c(1,2,4)) {
+    plot.deprec.rdist(data=x.deprec.60,dm=dm,s=seed,cex=.5,cex.axis=.5,lab.line=-1)
+  }
+}
+```
+<!-- ## plot.deprec.rdist(dm=dm,s=seed,cex=1.2) -->
+
+The number within the plot as well as the coloring denote the time steps
+(dark blue to dark red).  The $x$ and $y$ axes denote coordinates in the
+reduced space and are unitless, hence, no axes labels are shown.  The
+interpretation of the space delineated by the axes is that pairs of points
+(i.e., vectors of relative coefficients) that far apart in the plot are
+also far apart according to their Euclidean distances.
+
+The size of the space of each plot can be measured by the range of the
+axes.  In the case of the `dm` = 0, the trajectories of the coefficient
+vectors (for seeds 1 and 4) span a much larger space indicating wider
+variation in their relative values and the instability of the hedonic
+pricing mechanism under this depreciation mode.  The remaining depreciation
+modes occupy similarly sized spaces, but `dm` = 1 (the "correct" mode)
+appears to incur a slightly larger space.  Furthermore, the trajectories of
+`dm` = 1 and 2 are also roughly unidirectional along one of the dimensions
+while the two salient trajectories of `dm` = 1 incur switchbacks (i.e.,
+bi-directionality along with dimensions).
+
+\newpage
+
+#### Description of `fig.deprec.rdist.did`
+
+The `fig.deprec.rdist.did` plotting function has the following arguments
+which may be employed to generalize its functionalities.  As a general
+function, it can display an MDS of distances between outcome set (over
+time) from values of a single experimental variable over selected seeds.
+
+-------------------------------------------------------------------------------
+Argument  Default         Description
+--------  -------         -----------------------------------------------------
+data      x.deprec.60     Data containing outcomes
+
+D         0:2             Experimental conditions (default: depreciation modes)
+
+S         c(1,2,4)        Selected seeds to visualize
+
+ignore    c(1,2,3,26-0:4) Column ids of variables in the data to ignore in distance matrix calculation
+
+mode      "rel"           Transformation of the outcomes used in the MDS (default: relative to values at time = 0; alternative: "scale" for standardization)
+
+scalingfn "cmdscale"      Name of MDS scaling function (default: classical MDS, alternatives are "isoMDS" and "monoMDS" which require the `MASS` and `vegan` libraries respectively)
+------------------------------------------------------------------------------
+
+\newpage
+
+## Example 4 - Linear Model
+
+We examine the extent of linear predictability of a key outcome, the
+average price of coastal front property `avPriceCoastFront`, through three
+binary, parametric conditions: adaptive/static realtor hedonic, `A`;
+presence of insurance in the utility calculation, `I`; and engagement of
+buyer's income growth, `G`.
+
+We report separate models for three mortgage years parameters (`yM` $\in$
+{10,20,30}) and two settings for the parameter that sets the initial
+fraction of properties on sale (`fos` $\in$ {0.14,0.20} where the former
+has been the default for earlier RHEA runs and analysis).  We output the
+table of regression models as plain text as well as laid out as a HTML/PDF
+table in `R markdown` (using the `kable()` function). The following
+lines should be run in the `R` session to produce the regression
+results table:
+
+<!--  x.sr.14.dm1 <<- read.csv("../../data/x_sr_14_dm1.csv")
+  x.sr.20.dm1 <<- read.csv("../../data/x_sr_20_dm1.csv") -->
+
+```{r reg_print, eval=TRUE, comment=NA}
+if (!exists("x.fos.dm1.200")) x.fos.dm1.200 = read.csv("../../data/x_fos_dm1_200.csv")
+z = l.lm.yM2.fos.did(data=x.fos.dm1.200,do.res=F,lr=3,r=0,mode=0,YM=c(10,20,30),ret=T,print=T)
+kable(z,align=c('l',rep(c('r','l'),6)))
+```
+
+The above regression model predicts the dependent variable at time step
+= 60.  The overall impact of `yM` is lower absolute coefficients for the
+lower `yM` (i.e., for both positive and negative coefficient values)
+despite comparable base prices (i.e., Intercept).  However, the trend is
+not monotonic: some coefficients for `yM` = 20 can reside in between those
+of `yM` = 10 and 30.  And, we also see a lowering of the main effect for
+insurance even negative for `yM` = 10.  Also, `fos` heightens the impact of
+all the conditions (hedonics, insurance, and income growth) for `yM` $\in$
+{10,30} but not for 20.
+
+<!-- We compare column 3 (`yM`= 30,`fos`= 0.14) above to column 4 of -->
+<!--\Vref{tab:lm_hig}-->
+<!--The differences between the data are (I think) the
+introduction of the `SR` fix in the former and more seeds in the latter.
+We have a problem.-->
+<!-- We see that the main insurance effect is much higher
+here; this results in insurance always having a positive effect despite the
+activation of adaptive hedonics or income growth.-->
+<!--Also, regression modeling against `avPriceCoastFront` at
+time points corresponding to `yM` $\in$ {10,20} (i.e., ticks 20 and 40)
+does not fix the insurance effect problem.
+The model will require
+further adjustment if we are to use the `SR` fix and insurance is to have a
+negative effect on price.  I will verify the fidelity of the data of
+\Vref{tab:lm_hig}.  A lower `yM` of 20 does not appear to remedy the
+issue.-->
+<!-- We also introduce an interaction term for adaptive hedonics and income
+growth in the following table.
+(\Vref{tab:lm_yM_fos_AG}). -->
+
+\newpage
+
+#### Description of `l.lm.yM2.fos.did`
+
+The `l.lm.yM2.fos.did` reporting function has the following arguments which
+may be employed to generalize its functionalities.  As a general function,
+it reports separate linear regression models for a single dependent
+variable obtained across combinations of two conditions (here, `yM` and
+`fos`) predicted by user-defined modelive model of three parametric predictors
+(here labeled, `A`, `I`, and `G`).  The parametric predictors reside in
+variables named `RH`, `Ins`, and `G` and do not necessarily have to be binary.
+
+-------------------------------------------------------------------------------
+Argument  Default                                   Description
+--------  -------                                   ------------------------------------
+data      x.fos.dm1.200                             Data containing predictors and dependent variable
+
+y         "avPriceCoastFront"                       Dependent variable for regression models
+
+T         60                                        Time value(s)/range for the regression data
+
+scale     1000                                      Scaling value for dependent variable (for presentation purposes)
+
+fn        I                                         Transformation function on scaled dependent variable (default: indicator function)
+
+yvar      c("yM","fos")                             Variables names for the first two primary conditions
+
+YM        c(10,20,30)                               1st condition values/range
+
+FOS       c(0.14,0.20)                              2nd condition values/range
+
+form      "RH+Ins+G+Ins:RH+Ins:G+Ins:RH:G"          Predictive formula for regression model
+
+xlab      c("Intercept","I(nsurance)","A(daptive)", Labels for predictors in the output table
+          "G(rowth)","IxA","IxG","IxAxG")
+
+yvar.fmt  c("%d","%.2f")                            `sprintf()` format strings for `yvar` values' appearance in the output table
+
+ret       FALSE                                     Return the final table (w/o aligned cells)
+
+print     TRUE                                      Print the plain text of the table (w/alignment spacing)
+-------------------------------------------------------------------------------
+
+<!-- Table: Arguments for `l.lm.yM2.fos.did()` (with Defaults) -->
+
+\newpage
+
+## Description of Data Sets
+
+The following table provides basic summaries of each of the data sets (in
+order of appearance).
+
+----------------------------------------------------------------------------
+Name                 Description
+----                 -------------------------------------------------------
+x\_bs\_200.csv       Experiments over insurance and hedonic parameters; contains average prices for property types, buyer/seller stats; 25 seeds per condition; 200 ticks (100 years)
+
+x\_yM_10\_200.csv    Data borne from insurance disengaged but adaptive realtor hedonics engaged; 200 ticks
+
+x\_yM2_200.csv       Experiments over insurance, hedonics, income growth, and mortgage years; 25 seeds per condition; 200 ticks (100 years)
+
+x\_bs\_coef\_200.csv Similar to x\_bs\_200.csv but also varying new buyer coefficient from 0.6 to 0.8 in steps of 0.05; 25 seeds per condition; 200 ticks (100 years)
+
+x\_deprec\_60.csv    Regression coefficients with adaptive realtor hedonics engaged for four seeds with varying depreciation mode (`dm`); 60 ticks
+
+x\_fos\_dm1\_200.csv Examines outcomes' dependencies to the `fraction_on_sale` parameter of 0.14 and 0.20 over mortgage years (`yM`) of 10, 20, and 30 and depreciation mode (`dm`) of 1; 200 ticks
+
+----------------------------------------------------------------------------
+
+\newpage
+
+## Description of the Data Variables/Columns
+
+This table contains descriptions of all of the variables in the data sets
+employed in this vignette, with the exception of the data set for Example 3
+(i.e., `x.deprec.60`); the description of the variables in that data set
+appears afterwards.  A single table is presented for many of the variables
+span multiple data sets.
+
+|Variable          |Data Type        |Description                                               |
+|:-----------------|:----------------|:---------------------------------------------------------|
+|**Parameter, Seed, and Time Variables:**|
+|Ins               |integer (binary) |Insurance                                                 |
+|RH                |integer (binary) |Adaptive hedonics                                         |
+|G                 |integer (binary) |Income growth                                             |
+|yM                |integer          |Mortgage years                                            |
+|nBC               |real             |New buyers coefficient                                    |
+|s                 |integer          |Random number generator seed                              |
+|t                 |integer          |Time step (aka tick)                                      |
+|**Outcome Variables:**|
+|avPriceFP0        |real             |Avg price of non-flood risk properties                |
+|avPriceFP100      |real             |Avg price of properties with 1/100 risk               |
+|avPriceFP500      |real             |Avg price of properties with 1/500 risk               |
+|avPriceCoastFront |real             |Avg price of coastal properties                       |
+|avPriceNowFP0     |real             |Avg price of non-flood risk properties (just traded)  |
+|avPriceNowFP100   |real             |Avg price of properties with 1/100 risk (just traded) |
+|avPriceNowFP500   |real             |Avg price of properties with 1/500 risk (just traded) |
+|avPriceNowCF      |real             |Avg price of coastal properties (just traded)         |
+|nTradedNowFP0     |integer          |# of traded properties that are non-flood risk       |
+|nTradedNowFP100   |integer          |# of just traded properties that are 1/100 risk      |
+|nTradedNowFP500   |integer          |# of just traded properties that are 1/500 risk      |
+|nTradedNowCF      |integer          |# of just traded properties that are coastal         |
+|nT                |integer          |# of parcels just traded                             |
+|nB                |integer          |Current # of buyers                                  |
+|nS                |integer          |Current # of sellers                                 |
+|nNC               |integer          |# of newcomers                                       |
+|nOS               |integer          |# of old sellers                                     |
+|nOB               |integer          |# of old buyers                                      |
+|nBL               |integer          |# of buyers who left                                 |
+|dBS               |integer          |Difference between # of buyers and sellers           |
+|nD                |integer          |Difference between # of buyers and sellers           |
+
+\newpage
+
+The following table provides details about the data set employed in Example
+3 (`x.deprec.60`).  These data are primarily regression coefficients
+inferred in the hedonic model.  These coefficients will evolve only for the
+'adaptive' realtor hedonic condition.
+
+|Variable      |Data Type |Description                                      |
+|:-------------|:---------|:------------------------------------------------|
+|**Parameter, Seed, and Time Variables:**|
+|d             |integer   |Depreciation Mode                                |
+|s             |integer   |Random number generator seed                     |
+|time          |integer   |Time step or tick                                |
+|**Regression Coefficients:**|
+|intercept     |real      |Intercept                                        |
+|bathrooms     |real      |Number of bathrooms                              |
+|bathrooms.2   |real      |(Number of bathrooms)^2^                         |
+|age           |real      |Age of the house on the property                 |
+|age.2         |real      |Age^2^                                           |
+|SQFT          |real      |Square footage of the house                      |
+|SQFT.2        |real      |SQFT^2^                                          |
+|lotsize       |real      |Size of the property                             |
+|lotsize.2     |real      |lotsize^2^                                       |
+|newhome       |real      |Is the house new?                                |
+|postFirm      |real      |Is the property post-FIRM (Flood Insurance Rate Map) |
+|FP100         |real      |Is the parcel at 1/100 flood risk?               |
+|FP500         |real      |Is the property at 1/500 flood risk?             |
+|coastalFront  |real      |Is the property coastal front?                   |
+|log.distAmen. |real      |log(Distance to beach)                           |
+|log.distCBD.  |real      |log(Distance to center of business)              |
+|log.distHwy.  |real      |log(Distance to nearest highway)                 |
+|log.distPark. |real      |log(Distance to nearest park)                    |
+
+
+<!--
+## Short-hand commands
+
+The short-hand commands for all of the above examples:
+```{r short_cmds, eval=FALSE}
+f.run.did(mode="1a",csv.path="../../data/")
+f.run.did(mode="1b",csv.path="../../data/")
+f.run.did(mode="1c.0",csv.path="../../data/")
+f.run.did(mode="1c.1",csv.path="../../data/")
+f.run.did(mode="1c.2",csv.path="../../data/")
+f.run.did(mode="1d",csv.path="../../data/")
+f.run.did(mode="2",cs.path="../../data/")
+f.run.did(mode="3",csv.path="../../data/",draw.mode="rmd")
+f.run.did(mode="4",csv.path="../../data/")
+```
+-->
