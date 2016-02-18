@@ -7,4 +7,4 @@ This folder contains scripts and data from the RHEA agent-based model.
 * `docs`: Documentation (output of the RMarkdown document) in PDF format
 * `src`: Individual analysis scripts. Refer to the documentation for description and usage. Scripts have been modified to conform to the [miracle project archive preparation guidelines](https://github.com/comses/miracle/wiki/Project-Archive-Preparation-Guidelines)
 
-If you have any questions about the scripts and analysis in this folder, please contact Dr. Tatiana Filatova (t.filatova [at] utwente.nl) or Dr. Ju-Sung Lee (lee [at] eshcc.eur.nl)
+If you have any questions about the scripts and analysis in this folder, please contact Dr. Tatiana Filatova (t.filatova [at] utwente.nl) or Dr. Ju-Sung Lee (j.s.lee-1 [at] utwente.nl, or lee [at] eshcc.eur.nl)
