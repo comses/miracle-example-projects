@@ -28,7 +28,7 @@
 deployrUtils::deployrPackage("MASS")
 deployrUtils::deployrPackage("vegan")
 
-source("rhea/src/lib/ut_did.R"); ## Read in function library
+source(deployrUtils::deployrExternal("rhea/src/lib/ut_did.R", isPublic = TRUE)); ## Read in function library
 
 ## Read in data if not already loaded
 if (!exists("x.deprec.60")) x.deprec.60 = read.csv(deployrUtils::deployrExternal("rhea/data/x_deprec_60.csv", isPublic = TRUE));

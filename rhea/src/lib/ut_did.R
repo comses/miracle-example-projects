@@ -180,7 +180,7 @@ l.lm.yM2.fos.did <- function(data=x.fos.dm1.200,
     if (F) {
       xn = sprintf("\\T{%s}",c("Intercept"));
       xn = c(xn,sapply(c("Insurance","Adaptive","Growth"),function(a)
-        sprintf("%s\\T{%s}",substr(a,1,1),substr(a,2,nchar(a)))));
+        sprintf("%s\\T{%s}",substr(a,1,1),substr(a,2,nchar(a, keepNA = FALSE)))));
       if (mode == 0) 
         xn = c(xn,"I \\stimes A","I \\stimes G","I \\stimes A \\stimes G");
       if (mode == 1) 
@@ -1286,7 +1286,7 @@ catlm <- function(x,header=T,fill=T,simple=F,align=F,empty=F,
     }
   } else {
     sep0 = sep;
-    len = nchar(x[2,1])+3+offset;
+    len = nchar(x[2,1], keepNA = FALSE)+3+offset;
     at.end = F; 
     for (i in 1:nrow(x)) {
       for (j in 1:ncol(x)) {
@@ -1337,7 +1337,7 @@ catlm <- function(x,header=T,fill=T,simple=F,align=F,empty=F,
 }
 
 realign.col <- function(x,pre=F) {
-  M = max(nchar(x));
+  M = max(nchar(x, keepNA = FALSE));
   x = gsub("[ ]*$","",x); 
   align.col(x,pre=pre);
 }
@@ -1345,11 +1345,11 @@ realign.col <- function(x,pre=F) {
 align.col <- function(x,pre=T) {
   M = 0;
   for (i in 1:length(x)) {
-    M = max(nchar(x[i]),M);
+    M = max(nchar(x[i], keepNA = FALSE),M);
   }
   y = character(length(x));
   for (i in 1:length(x)) {
-    m = nchar(x[i]);
+    m = nchar(x[i], keepNA = FALSE);
     if (pre) {
       y[i] = pastes(paste(rep(" ",M-m),collapse=""),x[i]);
     } else {

@@ -34,8 +34,7 @@
 ##   default: .75
 ##   valid:   reasonable values between c(.5,2.0)
 
-
-source("rhea/src/lib/ut_did.R"); ## Read in function library
+source(deployrUtils::deployrExternal("rhea/src/lib/ut_did.R", isPublic = TRUE)); ## Read in function library
 
 ## Read in data if not already loaded
 if (!exists("x.bs.200")) x.bs.200 = read.csv(deployrUtils::deployrExternal("rhea/data/x_bs_200.csv", isPublic = TRUE));

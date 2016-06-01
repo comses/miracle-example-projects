@@ -33,7 +33,7 @@
 ##   default: 0:24
 ##   valid: any subset of 0:24, e.g., 0:5 or c(1,3,5,9) etc.
 
-source("rhea/src/lib/ut_did.R"); ## Read in function library
+source(deployrUtils::deployrExternal("rhea/src/lib/ut_did.R", isPublic = TRUE)); ## Read in function library
 
 ## Read in data if not already loaded
 if (!exists("x.yM2.200")) x.yM2.200 = read.csv(deployrUtils::deployrExternal("rhea/data/x_yM2_200.csv", isPublic = TRUE));

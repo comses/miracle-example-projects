@@ -25,7 +25,7 @@
 ##   default: 1
 ##   valid: any one of 0:24
 
-source("rhea/src/lib/ut_did.R"); ## Read in function library
+source(deployrUtils::deployrExternal("rhea/src/lib/ut_did.R", isPublic = TRUE)); ## Read in function library
 
 ## Read in data if not already loaded
 if (!exists("x.yM.10.200")) x.yM.10.200 = read.csv(deployrUtils::deployrExternal("rhea/data/x_yM_10_200.csv", isPublic = TRUE));

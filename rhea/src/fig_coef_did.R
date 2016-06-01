@@ -18,7 +18,7 @@
 ##   default: c(0.60,0.65,0.70,0.75,0.80)
 ##   valid:   any subset of c(0.60,0.65,0.70,0.75,0.80)
 
-source("rhea/src/lib/ut_did.R"); ## Read in function library
+source(deployrUtils::deployrExternal("rhea/src/lib/ut_did.R", isPublic = TRUE)); ## Read in function library
 
 ## Read in data if not already loaded
 if (!exists("x.bs.coef.200")) x.bs.coef.200 = read.csv(deployrUtils::deployrExternal("rhea/data/x_bs_coef_200.csv", isPublic = TRUE));
